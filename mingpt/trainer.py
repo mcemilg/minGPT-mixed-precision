@@ -104,7 +104,8 @@ class Trainer:
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
                         scaled_loss.backward()
                         # loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
+                    # torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
+                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), config.grad_norm_clip)
                     optimizer.step()
 
                     # decay the learning rate based on our progress
