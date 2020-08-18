@@ -11,6 +11,7 @@ import numpy as np
 
 import torch
 import torch.optim as optim
+from apex import amp
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data.dataloader import DataLoader
 
@@ -48,7 +49,7 @@ class Trainer:
         self.device = 'cpu'
         if torch.cuda.is_available():
             self.device = torch.cuda.current_device()
-            self.model = torch.nn.DataParallel(self.model).to(self.device)
+            
 
     def save_checkpoint(self):
         if self.config.ckpt_path is not None:
@@ -68,6 +69,11 @@ class Trainer:
             {"params": params_nodecay, "weight_decay": 0.0},
         ]
         optimizer = optim.AdamW(optim_groups, lr=config.learning_rate, betas=config.betas)
+	
+        # Allow Amp to perform casts as required by the opt_level
+        model = model.to(self.device)
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
+        model = torch.nn.DataParallel(model)
 
         def run_epoch(split):
             is_train = split == 'train'
@@ -93,7 +99,11 @@ class Trainer:
 
                     # backprop and update the parameters
                     model.zero_grad()
-                    loss.backward()
+
+                    # loss.backward() becomes:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                        # loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
                     optimizer.step()
 
